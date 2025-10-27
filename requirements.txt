@@ -1,0 +1,9 @@
+opencv-python
+numpy
+matplotlib
+scipy
+scikit-image
+pyrtools
+pillow
+pandas
+fpdf
