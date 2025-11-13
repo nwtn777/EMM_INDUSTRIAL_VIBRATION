@@ -237,6 +237,16 @@ Ver archivo `LICENSE`
 
 **nwtn777** - Proyecto desarrollado para análisis de vibraciones industriales
 
+## 📚 Referencias Bibliográficas
+
+Este proyecto implementa técnicas basadas en el siguiente trabajo seminal:
+
+- Wu, H. Y., Rubinstein, M., Shih, E., Guttag, J., Durand, F., & Freeman, W. T. (2012). 
+  **Eulerian Video Magnification for Revealing Subtle Changes in the World**. 
+  *ACM Transactions on Graphics (Proc. SIGGRAPH 2012)*, 31(4).
+
+El trabajo original introduce el concepto de amplificación de movimiento mediante análisis del flujo de Euler, permitiendo visualizar cambios minúsculos que son imperceptibles al ojo humano.
+
 ## 🤝 Contribuciones
 
 Las contribuciones son bienvenidas. Por favor:
