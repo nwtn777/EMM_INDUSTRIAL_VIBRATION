@@ -22,11 +22,10 @@
 
 - **Análisis de Vibración Multi-Método**:
   - Método de **Brillo (Intensidad)**: Análisis de cambios de luminancia
-  - Método de **Color**: Análisis de variaciones cromáticas
   - Método de **Flujo Óptico**: Detección de movimiento mediante optical flow
 
 - **Visualización en Tiempo Real**:
-  - Captura de video desde cámara web o archivo
+  - Captura de video desde cámara web
   - Visualización simultánea de video original y amplificado
   - Gráficas en vivo de espectro de frecuencias (FFT)
   - Gráficas de amplitud en el dominio del tiempo
@@ -68,7 +67,6 @@
 - **Exportación a PDF**:
   - Reportes profesionales en formato PDF
   - Documentación completa con gráficas incrustadas
-  - Procesamiento por lotes de múltiples archivos CSV
 
 ### 4. **Launcher (Gestor de Dependencias)**
 - **Verificador automático de dependencias**
@@ -206,7 +204,7 @@ Los parámetros de configuración se encuentran en `config.json`:
 - **Sistema Operativo**: Windows, macOS, Linux
 - **RAM**: Mínimo 4GB (recomendado 8GB)
 - **Procesador**: Dual-core mínimo (quad-core recomendado)
-- **Cámara**: Opcional (para captura en vivo)
+- **Cámara**: Obligatorio
 
 ## 📝 Notas Técnicas
 
