@@ -259,3 +259,11 @@ Las contribuciones son bienvenidas. Por favor:
 ---
 
 **Última actualización**: Noviembre 2025
+
+## 🎥 Ejemplo de Funcionamiento
+
+A continuación se muestra un video de ejemplo utilizando la interfaz GUI del programa para analizar las vibraciones del motor de un auto (Toyota Yaris):
+
+[![Motor Yaris - Ejemplo de Análisis](Videos/Motor%20yaris.mp4)](Videos/Motor%20yaris.mp4)
+
+> El video "Motor yaris.mp4" se encuentra en el directorio `Videos/` y muestra cómo el software amplifica y analiza las vibraciones del motor en tiempo real, permitiendo visualizar detalles imperceptibles a simple vista.
