@@ -239,6 +239,10 @@ Ver archivo `LICENSE`
 
 **nwtn777** - Proyecto desarrollado para análisis de vibraciones industriales
 
+## 🤖 Nota de Honestidad
+
+No soy ningún genio; gran parte de este proyecto fue realizado con el apoyo de herramientas de Inteligencia Artificial como GitHub Copilot y ChatGPT. La IA fue fundamental para resolver problemas, escribir código y documentar el proceso.
+
 ## 📚 Referencias Bibliográficas
 
 Este proyecto implementa técnicas basadas en el siguiente trabajo seminal:
