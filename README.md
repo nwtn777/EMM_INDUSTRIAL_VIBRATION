@@ -1,3 +1,5 @@
+> **Nota:** Este repositorio es la continuación de un proyecto previo que fue borrado accidentalmente. Aquí se reconstruyó y mejoró el trabajo original.
+
 [![Portada del proyecto](Videos/portada_motor_yaris.png)](Videos/Motor%20yaris.mp4)
 
 # EMM - Amplificación de Movimiento para Análisis de Vibraciones Industriales
