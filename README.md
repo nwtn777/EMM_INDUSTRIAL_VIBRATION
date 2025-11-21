@@ -50,6 +50,9 @@
   - Diseño moderno y responsivo
   - Controles intuitivos y organizados en pestañas
 
+  ![Light Mode](img/light_mode.png)
+  ![Dark Mode](img/dark_mode.png)
+
 ### 2. **Vibration FFT Analyzer** (Analizador de Frecuencias)
 - **Carga de archivos CSV** con datos de vibración
 - **Análisis espectral mediante FFT** (Transformada Rápida de Fourier)
