@@ -275,7 +275,7 @@ Las contribuciones son bienvenidas. Por favor:
 
 ## 🎥 Ejemplo de Funcionamiento
 
-A continuación se muestra un video de ejemplo utilizando la interfaz GUI del programa para analizar las vibraciones del motor de un auto (Toyota Yaris):
+A continuación se muestra un video de ejemplo utilizando la interfaz GUI del programa para analizar las vibraciones del motor de un auto (Toyota Yaris 2008):
 
 [![Motor Yaris - Ejemplo de Análisis](Videos/Motor%20yaris.mp4)](Videos/Motor%20yaris.mp4)
 
