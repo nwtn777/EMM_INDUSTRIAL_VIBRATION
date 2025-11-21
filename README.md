@@ -40,6 +40,11 @@
   - Registro temporal con timestamps
   - Descarga manual de historiales
 
+- **Interfaz de Usuario**:
+  - **Modo Oscuro (Dark Mode)**: Interfaz optimizada para entornos con poca luz
+  - Diseño moderno y responsivo
+  - Controles intuitivos y organizados en pestañas
+
 ### 2. **Vibration FFT Analyzer** (Analizador de Frecuencias)
 - **Carga de archivos CSV** con datos de vibración
 - **Análisis espectral mediante FFT** (Transformada Rápida de Fourier)
