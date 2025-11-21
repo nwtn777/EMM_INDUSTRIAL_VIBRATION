@@ -40,6 +40,11 @@
   - Registro temporal con timestamps
   - Descarga manual de historiales
 
+- **Rendimiento Optimizado**:
+  - Procesamiento paralelo multi-hilo para maximizar FPS
+  - Algoritmos eficientes de visión por computadora
+  - Uso de caché inteligente para cálculos repetitivos
+
 - **Interfaz de Usuario**:
   - **Modo Oscuro (Dark Mode)**: Interfaz optimizada para entornos con poca luz
   - Diseño moderno y responsivo
