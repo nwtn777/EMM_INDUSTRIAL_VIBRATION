@@ -142,11 +142,14 @@ class MotionMagnificationGUI:
         self.signal_buffer = deque(maxlen=300)
         self.frame_count = 0
         
-        # Variables para grabación CSV
+        # Variables para grabación CSV y Video
         self.is_recording = False
+        self.record_video = tk.BooleanVar(value=False)  # Checkbox para grabar video
+        self.video_writer = None
         self.csv_file = None
         self.csv_writer = None
         self.recording_filename = ""
+        self.video_filename = ""
         
         # Variables para ROI
         self.roi = None
@@ -456,6 +459,11 @@ class MotionMagnificationGUI:
         self.stop_record_button = ttk.Button(button_row4, text="⏺ Detener Grabación", 
                                             command=self.stop_recording, state='disabled')
         self.stop_record_button.pack(side='left', padx=5)
+
+        # Checkbox para habilitar grabación de video
+        self.video_record_check = ttk.Checkbutton(button_row4, text="Grabar Video (.mp4)", 
+                                                 variable=self.record_video)
+        self.video_record_check.pack(side='left', padx=5)
         
         # Frame para mostrar estado actual
         status_frame = ttk.LabelFrame(parent, text="Estado del Sistema")
@@ -1173,6 +1181,8 @@ class MotionMagnificationGUI:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             self.recording_filename = f"historiales/vibration_recording_{timestamp}.csv"
             os.makedirs("historiales", exist_ok=True)
+            
+            # Inicializar CSV
             self.csv_file = open(self.recording_filename, mode='w', newline='')
             self.csv_writer = csv.writer(self.csv_file)
             if self.is_calibrated:
@@ -1180,13 +1190,28 @@ class MotionMagnificationGUI:
                                         "velocity_mm_s", "mean_signal", "mm_per_pixel"])
             else:
                 self.csv_writer.writerow(["frame", "timestamp", "mean_magnitude_px_frame", "mean_signal"])
+            
+            # Preparar grabación de video si está habilitada
+            if self.record_video.get():
+                self.video_filename = f"historiales/video_recording_{timestamp}.mp4"
+                # El writer se inicializará en el loop de procesamiento para asegurar dimensiones correctas
+                self.video_writer = None 
+                
             self.is_recording = True
             # Actualizar interfaz
             self.record_button.config(state='disabled')
             self.stop_record_button.config(state='normal')
-            self.recording_status_label.config(text=f"Grabación: ACTIVA - {self.recording_filename}", 
-                                             foreground="green")
+            self.video_record_check.config(state='disabled') # Bloquear cambio durante grabación
+            
+            status_text = f"Grabación: ACTIVA - CSV"
+            if self.record_video.get():
+                status_text += " + VIDEO"
+            
+            self.recording_status_label.config(text=status_text, foreground="green")
             self.log_message(f"Grabación iniciada: {self.recording_filename}")
+            if self.record_video.get():
+                self.log_message(f"Grabación de video habilitada: {self.video_filename}")
+                
             # Actualizar botones de la pestaña de gráficas
             if hasattr(self, 'graph_record_button'):
                 self.update_graph_record_buttons()
@@ -1204,12 +1229,23 @@ class MotionMagnificationGUI:
                 self.csv_file.close()
                 self.csv_file = None
                 self.csv_writer = None
+                
+            # Cerrar Video Writer
+            if self.video_writer:
+                self.video_writer.release()
+                self.video_writer = None
+                
             self.is_recording = False
             # Actualizar interfaz
             self.record_button.config(state='normal' if self.is_running else 'disabled')
             self.stop_record_button.config(state='disabled')
+            self.video_record_check.config(state='normal') # Habilitar checkbox nuevamente
+            
             self.recording_status_label.config(text="Grabación: Detenida", foreground="orange")
-            self.log_message(f"Grabación detenida. Archivo guardado: {self.recording_filename}")
+            msg = f"Grabación detenida.\nCSV: {self.recording_filename}"
+            if self.record_video.get():
+                msg += f"\nVideo: {self.video_filename}"
+            self.log_message(msg.replace("\n", " | "))
             # Actualizar botones de la pestaña de gráficas
             if hasattr(self, 'graph_record_button'):
                 self.update_graph_record_buttons()
@@ -1364,7 +1400,7 @@ class MotionMagnificationGUI:
                             # Guardar en CSV de grabación solo si está activa
                             if self.is_recording and self.csv_writer:
                                 try:
-                                    timestamp_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                    timestamp_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
                                     if self.is_calibrated:
                                         self.csv_writer.writerow([self.frame_count, timestamp_str, 
                                                                mean_magnitude, physical_value, mean_signal, 
@@ -1373,8 +1409,27 @@ class MotionMagnificationGUI:
                                         self.csv_writer.writerow([self.frame_count, timestamp_str, 
                                                                mean_magnitude, mean_signal])
                                     self.csv_file.flush()
+                                    self.csv_file.flush()
                                 except Exception as e:
                                     self.log_message(f"Error escribiendo a CSV de grabación: {str(e)}")
+                                    
+                                # Grabar video si está habilitado
+                                if self.record_video.get():
+                                    try:
+                                        # Inicializar writer si es el primer frame
+                                        if self.video_writer is None:
+                                            h_frame, w_frame = frame.shape[:2]
+                                            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                                            # Usar FPS actual o el configurado
+                                            rec_fps = self.get_effective_fps()
+                                            self.video_writer = cv2.VideoWriter(self.video_filename, fourcc, rec_fps, (w_frame, h_frame))
+                                            self.log_message("VideoWriter inicializado correctamente")
+                                        
+                                        # Escribir frame
+                                        if self.video_writer is not None:
+                                            self.video_writer.write(frame)
+                                    except Exception as e:
+                                        self.log_message(f"Error grabando video: {str(e)}")
                             
                             # Enviar datos para gráficas
                             try:
