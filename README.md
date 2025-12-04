@@ -28,8 +28,13 @@
   - Método de **Brillo (Intensidad)**: Análisis de cambios de luminancia
   - Método de **Flujo Óptico**: Detección de movimiento mediante optical flow
 
+- **Análisis de Video Offline**:
+  - **Carga de archivos de video** (.mp4, .avi, etc.) para análisis posterior
+  - **Reproducción en bucle (Loop)** para análisis continuo de eventos cortos
+  - **Detección automática de FPS** del video original
+
 - **Visualización en Tiempo Real**:
-  - Captura de video desde cámara web
+  - Captura de video desde cámara web o archivo
   - Visualización simultánea de video original y amplificado
   - Gráficas en vivo de espectro de frecuencias (FFT)
   - Gráficas de amplitud en el dominio del tiempo

@@ -118,6 +118,12 @@ class MotionMagnificationGUI:
         self.fl = tk.DoubleVar(value=0.5)
         self.fh = tk.DoubleVar(value=9)
 
+        # Variables para fuente de video (Cámara vs Archivo)
+        self.video_source_type = tk.StringVar(value='camera')  # 'camera' o 'file'
+        self.video_file_path = ""
+        self.loop_video = tk.BooleanVar(value=True)
+
+
         # Añadimos estas variables para mantener compatibilidad, pero no se usan
         self.use_frame_skip = tk.BooleanVar(value=False)  # Siempre desactivado
         self.skip_frames = tk.IntVar(value=1)  # Siempre 1 (no saltar frames)
@@ -323,86 +329,111 @@ class MotionMagnificationGUI:
         ttk.Label(config_frame, text=help_text, foreground="blue", font=("Arial", 8), justify="left", wraplength=600).grid(
             row=12, column=0, columnspan=4, sticky='w', padx=5, pady=(8, 2))
         
-        # Selección de cámara
-        ttk.Label(config_frame, text="Cámara:").grid(row=0, column=0, sticky='w', padx=5, pady=2)
-        camera_combo = ttk.Combobox(config_frame, textvariable=self.selected_camera, 
-                                   values=list(range(5)), state='readonly', width=8)
-        camera_combo.grid(row=0, column=1, padx=5, pady=2)
+        # --- Selección de Fuente (Row 0) ---
+        ttk.Label(config_frame, text="Fuente:").grid(row=0, column=0, sticky='w', padx=5, pady=2)
+        source_frame = ttk.Frame(config_frame)
+        source_frame.grid(row=0, column=1, columnspan=3, sticky='w')
         
-        # FPS
-        ttk.Label(config_frame, text="FPS:").grid(row=0, column=2, sticky='w', padx=5, pady=2)
+        ttk.Radiobutton(source_frame, text="Cámara", variable=self.video_source_type, value='camera', 
+                       command=self.toggle_source_inputs).pack(side='left', padx=2)
+        ttk.Radiobutton(source_frame, text="Video", variable=self.video_source_type, value='file',
+                       command=self.toggle_source_inputs).pack(side='left', padx=2)
+        
+        self.loop_check = ttk.Checkbutton(source_frame, text="Loop", variable=self.loop_video)
+        self.loop_check.pack(side='left', padx=5)
+
+        # --- Selección de Entrada (Row 1) ---
+        ttk.Label(config_frame, text="Entrada:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
+        self.input_frame = ttk.Frame(config_frame)
+        self.input_frame.grid(row=1, column=1, columnspan=3, sticky='w', padx=5)
+        
+        # Widgets de Cámara
+        self.camera_combo = ttk.Combobox(self.input_frame, textvariable=self.selected_camera, 
+                                   values=list(range(5)), state='readonly', width=5)
+        self.camera_combo.pack(side='left', padx=2)
+        
+        # Widgets de Archivo (inicialmente ocultos o mostrados según estado)
+        self.load_video_btn = ttk.Button(self.input_frame, text="📂 Cargar", command=self.load_video_file)
+        self.file_label = ttk.Label(self.input_frame, text="<Sin archivo>", width=15, foreground="gray")
+        
+        # FPS (Row 2)
+        ttk.Label(config_frame, text="FPS:").grid(row=2, column=0, sticky='w', padx=5, pady=2)
         fps_spinbox = ttk.Spinbox(config_frame, from_=1, to=60, textvariable=self.fps, 
                                  width=8, increment=1)
-        fps_spinbox.grid(row=0, column=3, padx=5, pady=2)
+        fps_spinbox.grid(row=2, column=1, padx=5, pady=2)
         
-        # Alpha
-        ttk.Label(config_frame, text="Alpha:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
+        # Alpha (Row 3)
+        ttk.Label(config_frame, text="Alpha:").grid(row=3, column=0, sticky='w', padx=5, pady=2)
         alpha_spinbox = ttk.Spinbox(config_frame, from_=1, to=1000, textvariable=self.alpha, 
                                    width=8, increment=10)
-        alpha_spinbox.grid(row=1, column=1, padx=5, pady=2)
+        alpha_spinbox.grid(row=3, column=1, padx=5, pady=2)
         
-        # Lambda_c
-        ttk.Label(config_frame, text="Lambda_c:").grid(row=1, column=2, sticky='w', padx=5, pady=2)
+        # Lambda_c (Row 3)
+        ttk.Label(config_frame, text="Lambda_c:").grid(row=3, column=2, sticky='w', padx=5, pady=2)
         lambda_spinbox = ttk.Spinbox(config_frame, from_=1, to=500, textvariable=self.lambda_c, 
                                     width=8, increment=10)
-        lambda_spinbox.grid(row=1, column=3, padx=5, pady=2)
+        lambda_spinbox.grid(row=3, column=3, padx=5, pady=2)
         
-        # Frecuencias
-        ttk.Label(config_frame, text="fl:").grid(row=2, column=0, sticky='w', padx=5, pady=2)
+        # Frecuencias (Row 4)
+        ttk.Label(config_frame, text="fl:").grid(row=4, column=0, sticky='w', padx=5, pady=2)
         fl_spinbox = ttk.Spinbox(config_frame, from_=0.01, to=10, textvariable=self.fl, 
                                 width=8, increment=0.01, format="%.3f")
-        fl_spinbox.grid(row=2, column=1, padx=5, pady=2)
+        fl_spinbox.grid(row=4, column=1, padx=5, pady=2)
         
-        ttk.Label(config_frame, text="fh:").grid(row=2, column=2, sticky='w', padx=5, pady=2)
+        ttk.Label(config_frame, text="fh:").grid(row=4, column=2, sticky='w', padx=5, pady=2)
         fh_spinbox = ttk.Spinbox(config_frame, from_=0.1, to=20, textvariable=self.fh, 
                                 width=8, increment=0.1, format="%.2f")
-        fh_spinbox.grid(row=2, column=3, padx=5, pady=2)
+        fh_spinbox.grid(row=4, column=3, padx=5, pady=2)
         
-        # Filtro FFT de frecuencias bajas
+        # Filtro FFT de frecuencias bajas (Row 5)
         ttk.Label(config_frame, text="🔽 Filtro FFT:", font=('Arial', 8, 'bold')).grid(
-            row=3, column=0, columnspan=2, sticky='w', padx=5, pady=2)
+            row=5, column=0, columnspan=2, sticky='w', padx=5, pady=2)
         
         fft_filter_check = ttk.Checkbutton(config_frame, text="Filtrar freq. bajas", 
                                           variable=self.fft_highpass_enabled)
-        fft_filter_check.grid(row=3, column=2, columnspan=2, sticky='w', padx=5, pady=2)
+        fft_filter_check.grid(row=5, column=2, columnspan=2, sticky='w', padx=5, pady=2)
         
-        ttk.Label(config_frame, text="Corte (Hz):").grid(row=4, column=0, sticky='w', padx=5, pady=2)
+        ttk.Label(config_frame, text="Corte (Hz):").grid(row=6, column=0, sticky='w', padx=5, pady=2)
         cutoff_spinbox = ttk.Spinbox(config_frame, from_=0.1, to=10, textvariable=self.fft_cutoff_freq, 
                                    width=8, increment=0.1, format="%.1f")
-        cutoff_spinbox.grid(row=4, column=1, padx=5, pady=2)
+        cutoff_spinbox.grid(row=6, column=1, padx=5, pady=2)
         
-        # Calibración física
+        # Calibración física (Row 7)
         calib_separator = ttk.Separator(config_frame, orient='horizontal')
-        calib_separator.grid(row=5, column=0, columnspan=4, sticky='ew', pady=5)
+        calib_separator.grid(row=7, column=0, columnspan=4, sticky='ew', pady=5)
         
         ttk.Label(config_frame, text="📏 Calibración Física", font=('Arial', 9, 'bold')).grid(
-            row=6, column=0, columnspan=4, pady=2)
+            row=8, column=0, columnspan=4, pady=2)
         
-        ttk.Label(config_frame, text="Dist. real (mm):").grid(row=7, column=0, sticky='w', padx=5, pady=2)
+        ttk.Label(config_frame, text="Dist. real (mm):").grid(row=9, column=0, sticky='w', padx=5, pady=2)
         calib_dist_spinbox = ttk.Spinbox(config_frame, from_=1, to=1000, textvariable=self.calibration_distance_mm, 
                                         width=8, increment=1, format="%.1f")
-        calib_dist_spinbox.grid(row=7, column=1, padx=5, pady=2)
+        calib_dist_spinbox.grid(row=9, column=1, padx=5, pady=2)
         
-        ttk.Label(config_frame, text="Píxeles:").grid(row=7, column=2, sticky='w', padx=5, pady=2)
+        ttk.Label(config_frame, text="Píxeles:").grid(row=9, column=2, sticky='w', padx=5, pady=2)
         calib_pixels_spinbox = ttk.Spinbox(config_frame, from_=1, to=5000, textvariable=self.calibration_pixels, 
                                           width=8, increment=1)
-        calib_pixels_spinbox.grid(row=7, column=3, padx=5, pady=2)
+        calib_pixels_spinbox.grid(row=9, column=3, padx=5, pady=2)
         
-        # Sección de optimización de rendimiento
+        # Sección de optimización de rendimiento (Row 10)
         optim_separator = ttk.Separator(config_frame, orient='horizontal')
-        optim_separator.grid(row=8, column=0, columnspan=4, sticky='ew', pady=5)
+        optim_separator.grid(row=10, column=0, columnspan=4, sticky='ew', pady=5)
         
         ttk.Label(config_frame, text=" Optimización de Rendimiento", font=('Arial', 9, 'bold')).grid(
-            row=9, column=0, columnspan=4, pady=2)
+            row=11, column=0, columnspan=4, pady=2)
         
         # Procesamiento paralelo
         parallel_check = ttk.Checkbutton(config_frame, text="Procesamiento paralelo", 
                                         variable=self.use_parallel_processing)
-        parallel_check.grid(row=10, column=0, columnspan=2, sticky='w', padx=5, pady=2)
+        parallel_check.grid(row=12, column=0, columnspan=2, sticky='w', padx=5, pady=2)
         
         # Información de rendimiento
         ttk.Label(config_frame, text=f"CPUs detectadas: {multiprocessing.cpu_count()}", 
-                 font=('Arial', 8, 'italic')).grid(row=10, column=2, columnspan=2, sticky='w', padx=5, pady=2)
+                 font=('Arial', 8, 'italic')).grid(row=12, column=2, columnspan=2, sticky='w', padx=5, pady=2)
+
+        # Inicializar estado de inputs
+        self.toggle_source_inputs()
+
         
         
         # Botones de control
@@ -481,6 +512,48 @@ class MotionMagnificationGUI:
         
         self.recording_status_label = ttk.Label(status_frame, text="Grabación: Detenida", foreground="orange")
         self.recording_status_label.pack(pady=2)
+
+    def toggle_source_inputs(self):
+        """Alternar visibilidad de inputs según fuente seleccionada"""
+        source = self.video_source_type.get()
+        if source == 'camera':
+            self.load_video_btn.pack_forget()
+            self.file_label.pack_forget()
+            self.camera_combo.pack(side='left', padx=2)
+            self.loop_check.config(state='disabled')
+        else:
+            self.camera_combo.pack_forget()
+            self.load_video_btn.pack(side='left', padx=2)
+            self.file_label.pack(side='left', padx=2)
+            self.loop_check.config(state='normal')
+
+    def load_video_file(self):
+        """Abrir diálogo para seleccionar archivo de video"""
+        file_path = filedialog.askopenfilename(
+            title="Seleccionar video",
+            filetypes=[("Archivos de video", "*.mp4 *.avi *.mov *.mkv"), ("Todos los archivos", "*.*")]
+        )
+        if file_path:
+            self.video_file_path = file_path
+            filename = os.path.basename(file_path)
+            # Acortar nombre si es muy largo
+            if len(filename) > 20:
+                filename = filename[:17] + "..."
+            self.file_label.config(text=filename, foreground="black")
+            self.log_message(f"Video cargado: {file_path}")
+            
+            # Intentar leer FPS del video
+            try:
+                cap = cv2.VideoCapture(file_path)
+                if cap.isOpened():
+                    fps = cap.get(cv2.CAP_PROP_FPS)
+                    if fps > 0:
+                        self.fps.set(fps)
+                        self.log_message(f"FPS detectados del video: {fps:.2f}")
+                    cap.release()
+            except Exception as e:
+                self.log_message(f"Advertencia: No se pudo leer FPS del video: {e}")
+
         
     def setup_video_panel(self, parent):
         """Configurar el panel de video"""
@@ -648,18 +721,33 @@ class MotionMagnificationGUI:
             elif not hasattr(self, 'executor'):
                 self.executor = ThreadPoolExecutor(max_workers=self.max_workers)
             
-            # Inicializar cámara
-            camera_id = self.selected_camera.get()
-            self.camera = cv2.VideoCapture(camera_id)
+            # Inicializar cámara o video
+            source_type = self.video_source_type.get()
             
-            if not self.camera.isOpened():
-                messagebox.showerror("Error", f"No se pudo abrir la cámara {camera_id}")
-                return
-                
+            if source_type == 'camera':
+                camera_id = self.selected_camera.get()
+                self.camera = cv2.VideoCapture(camera_id)
+                if not self.camera.isOpened():
+                    messagebox.showerror("Error", f"No se pudo abrir la cámara {camera_id}")
+                    return
+                self.log_message(f"Cámara {camera_id} inicializada correctamente")
+            else:
+                if not self.video_file_path:
+                    messagebox.showerror("Error", "No se ha seleccionado ningún archivo de video")
+                    return
+                if not os.path.exists(self.video_file_path):
+                    messagebox.showerror("Error", f"El archivo no existe: {self.video_file_path}")
+                    return
+                    
+                self.camera = cv2.VideoCapture(self.video_file_path)
+                if not self.camera.isOpened():
+                    messagebox.showerror("Error", f"No se pudo abrir el archivo de video")
+                    return
+                self.log_message(f"Video inicializado: {os.path.basename(self.video_file_path)}")
+            
             # Ya no se usa calibración de ruido
             if not use_calibration:
                 self.log_message("Iniciando sin calibración de ruido de fondo")
-            self.log_message(f"Cámara {camera_id} inicializada correctamente")
             
             # Actualizar estado visual
             self.status_label.config(text="Sistema ejecutándose", foreground="green")
@@ -1311,7 +1399,19 @@ class MotionMagnificationGUI:
 
                 ret, frame = self.camera.read()
                 if not ret:
-                    break
+                    # Manejo de fin de video o error de cámara
+                    if self.video_source_type.get() == 'file':
+                        if self.loop_video.get():
+                            self.log_message("Reiniciando video (Loop)...")
+                            self.camera.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                            continue
+                        else:
+                            self.log_message("Fin del video.")
+                            self.stop_monitoring()
+                            break
+                    else:
+                        self.log_message("Error leyendo frame de cámara.")
+                        break
 
                 # Actualizar el frame actual para optimización y GUI
                 self.current_frame = frame.copy()
