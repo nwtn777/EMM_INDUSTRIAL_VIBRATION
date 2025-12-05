@@ -145,7 +145,8 @@ class MotionMagnificationGUI:
         self.video_queue = queue.Queue()
         
         # Buffer para datos
-        self.signal_buffer = deque(maxlen=300)
+        self.signal_buffer = deque(maxlen=100)
+        self.waterfall_buffer = deque(maxlen=100)  # Buffer para la gráfica de cascada
         self.frame_count = 0
         
         # Variables para grabación CSV y Video
@@ -799,6 +800,7 @@ class MotionMagnificationGUI:
         self.magnify_engine = None
         self.frame_count = 0
         self.signal_buffer.clear()
+        self.waterfall_buffer.clear()
         
         # Limpiar caches
         self.pyramid_cache.clear()
@@ -1697,6 +1699,22 @@ class MotionMagnificationGUI:
 
                         self.ax2.grid(True, which='both', linestyle=':', alpha=0.4)
                         self.ax2.legend(loc='upper right', fontsize=9, frameon=True)
+
+                        # Actualizar Waterfall (Espectrograma)
+                        # Solo si el buffer está lleno para asegurar consistencia en dimensiones
+                        if len(signal_data) >= 100:
+                            # Usar logaritmo para resaltar detalles de baja amplitud
+                            fft_log = np.log1p(fft_vals[1:])
+                            self.waterfall_buffer.append(fft_log)
+                            
+                            if len(self.waterfall_buffer) > 0:
+                                waterfall_arr = np.array(self.waterfall_buffer)
+                                self.waterfall_im.set_data(waterfall_arr)
+                                self.waterfall_im.set_clim(vmin=np.min(waterfall_arr), vmax=np.max(waterfall_arr))
+                                
+                                # Ajustar extensión de ejes [xmin, xmax, ymin, ymax]
+                                if len(freqs) > 1:
+                                    self.waterfall_im.set_extent([freqs[1], freqs[-1], 0, len(self.waterfall_buffer)])
 
                     self.canvas.draw()
         except queue.Empty:
