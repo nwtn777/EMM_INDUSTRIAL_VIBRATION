@@ -103,6 +103,21 @@ class MotionMagnificationGUI:
         self.root = root
         self.root.title("Motion Magnification - Sistema de Monitoreo de Vibraciones")
         self.root.geometry("1400x900")
+        self.root.minsize(1200, 700)
+        
+        # Agregar manejo de cierre de ventana
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        # Variables de control
+        self.camera = None
+        self.is_running = False
+        self.selected_camera = tk.IntVar(value=0)
+        self.fps = tk.DoubleVar(value=30.0)
+        self.alpha = tk.DoubleVar(value=200.0)
+        self.lambda_c = tk.DoubleVar(value=80.0)
+        self.fl = tk.DoubleVar(value=0.5)
+        self.fh = tk.DoubleVar(value=9)
+
         # Añadimos estas variables para mantener compatibilidad, pero no se usan
         self.use_frame_skip = tk.BooleanVar(value=False)  # Siempre desactivado
         self.skip_frames = tk.IntVar(value=1)  # Siempre 1 (no saltar frames)
@@ -177,14 +192,7 @@ class MotionMagnificationGUI:
         
         # Método de vibración: 'brillo' o 'flujo'
         self.vibration_method = tk.StringVar(value='brillo')
-        
-        # --- Dark Mode ---
-        self.dark_mode = tk.BooleanVar(value=False)
-        self.style = ttk.Style()
-        self.style.theme_use('clam')  # Usar 'clam' para mejor soporte de colores
-        
         self.setup_ui()
-        self.apply_theme()  # Aplicar tema inicial
         self.update_console()
         # Iniciar actualización de video con delay
         self.root.after(1000, self.update_video_display)
@@ -285,10 +293,6 @@ class MotionMagnificationGUI:
         opt_btn = ttk.Button(config_frame, text="Optimizar Alpha/Lambda automáticamente", command=run_auto_opt)
         opt_btn.grid(row=1, column=4, padx=10, pady=2, sticky='w')
 
-        # Botón de Dark Mode
-        self.dark_mode_btn = ttk.Button(config_frame, text="🌙 Dark Mode", command=self.toggle_theme)
-        self.dark_mode_btn.grid(row=0, column=4, padx=10, pady=2, sticky='w')
-
         # Selección de método de vibración
         ttk.Label(config_frame, text="Método de vibración:").grid(row=11, column=0, sticky='w', padx=5, pady=2)
         metodo_frame = ttk.Frame(config_frame)
@@ -300,6 +304,24 @@ class MotionMagnificationGUI:
             "Alpha (amplificación): 10-50 = baja, 100-200 = recomendado, >300 = solo para señales muy limpias.\n"
             "Lambda_c (escala espacial): 10-50 = detalles finos, 100-200 = piezas grandes, >300 = objetos muy grandes.\n"
             "Recomendado: Alpha 150-200 y Lambda_c 100-150 para vibraciones industriales.\n"
+            "Ajusta alpha para más/menos sensibilidad y lambda_c según el tamaño de la estructura que te interesa."
+        )
+        ttk.Label(config_frame, text=help_text, foreground="blue", font=("Arial", 8), justify="left", wraplength=600).grid(
+            row=12, column=0, columnspan=4, sticky='w', padx=5, pady=(8, 2))
+        
+        # Selección de cámara
+        ttk.Label(config_frame, text="Cámara:").grid(row=0, column=0, sticky='w', padx=5, pady=2)
+        camera_combo = ttk.Combobox(config_frame, textvariable=self.selected_camera, 
+                                   values=list(range(5)), state='readonly', width=8)
+        camera_combo.grid(row=0, column=1, padx=5, pady=2)
+        
+        # FPS
+        ttk.Label(config_frame, text="FPS:").grid(row=0, column=2, sticky='w', padx=5, pady=2)
+        fps_spinbox = ttk.Spinbox(config_frame, from_=1, to=60, textvariable=self.fps, 
+                                 width=8, increment=1)
+        fps_spinbox.grid(row=0, column=3, padx=5, pady=2)
+        
+        # Alpha
         ttk.Label(config_frame, text="Alpha:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
         alpha_spinbox = ttk.Spinbox(config_frame, from_=1, to=1000, textvariable=self.alpha, 
                                    width=8, increment=10)
@@ -714,20 +736,6 @@ class MotionMagnificationGUI:
         
         self.log_message("Monitoreo detenido - Sistema listo para nueva configuración")
         
-    def select_video_file(self):
-        """Abrir diálogo para seleccionar archivo de video"""
-        filepath = filedialog.askopenfilename(
-            title="Seleccionar archivo de video",
-            filetypes=[("Archivos de video", "*.mp4 *.avi *.mov *.mkv"), ("Todos los archivos", "*.*")]
-        )
-        if filepath:
-            self.video_file_path = filepath
-            self.video_source_mode = 'file'
-            self.log_message(f"Fuente de video seleccionada: Archivo ({os.path.basename(filepath)})")
-            # Actualizar etiqueta o UI si es necesario
-            if hasattr(self, 'source_label'):
-                self.source_label.config(text=f"Archivo: {os.path.basename(filepath)}")
-
     def select_roi(self):
         """Seleccionar ROI en la imagen"""
         if not self.camera:
@@ -1530,79 +1538,6 @@ class MotionMagnificationGUI:
         if self.root.winfo_exists():
             self.root.after(100, self.update_graphs)
 
-
-    def toggle_theme(self):
-        """Alternar entre modo claro y oscuro"""
-        self.dark_mode.set(not self.dark_mode.get())
-        self.apply_theme()
-
-    def apply_theme(self):
-        """Aplicar el tema actual (claro/oscuro) a la interfaz"""
-        is_dark = self.dark_mode.get()
-        
-        # Colores
-        bg_color = "#2b2b2b" if is_dark else "#f0f0f0"
-        fg_color = "#ffffff" if is_dark else "#000000"
-        field_bg = "#3b3b3b" if is_dark else "#ffffff"
-        select_bg = "#4a6984" if is_dark else "#0078d7"
-        
-        # Configurar root
-        self.root.configure(bg=bg_color)
-        
-        # Configurar estilos ttk
-        self.style.configure(".", background=bg_color, foreground=fg_color, fieldbackground=field_bg)
-        self.style.configure("TFrame", background=bg_color)
-        self.style.configure("TLabel", background=bg_color, foreground=fg_color)
-        self.style.configure("TButton", background=field_bg, foreground=fg_color, borderwidth=1)
-        self.style.map("TButton", background=[('active', select_bg)])
-        self.style.configure("TLabelframe", background=bg_color, foreground=fg_color)
-        self.style.configure("TLabelframe.Label", background=bg_color, foreground=fg_color)
-        self.style.configure("TCheckbutton", background=bg_color, foreground=fg_color)
-        self.style.configure("TRadiobutton", background=bg_color, foreground=fg_color)
-        self.style.configure("TNotebook", background=bg_color)
-        self.style.configure("TNotebook.Tab", background=bg_color, foreground=fg_color, padding=[10, 2])
-        self.style.map("TNotebook.Tab", background=[('selected', field_bg)], foreground=[('selected', fg_color)])
-        self.style.configure("TCombobox", fieldbackground=field_bg, background=bg_color, foreground=fg_color)
-        self.style.configure("TSpinbox", fieldbackground=field_bg, background=bg_color, foreground=fg_color)
-        
-        # Configurar widgets tk estándar
-        if hasattr(self, 'console_text'):
-            self.console_text.configure(bg=field_bg, fg=fg_color, insertbackground=fg_color)
-            
-        # Actualizar botón de tema
-        if hasattr(self, 'dark_mode_btn'):
-            self.dark_mode_btn.config(text="☀️ Light Mode" if is_dark else "🌙 Dark Mode")
-
-        # Actualizar gráficas matplotlib
-        if hasattr(self, 'fig'):
-            plot_bg = "#2b2b2b" if is_dark else "white"
-            plot_fg = "white" if is_dark else "black"
-            grid_color = "#555555" if is_dark else "#dddddd"
-            
-            self.fig.patch.set_facecolor(plot_bg)
-            
-            for ax in [self.ax1, self.ax2]:
-                ax.set_facecolor(plot_bg)
-                ax.tick_params(axis='x', colors=plot_fg)
-                ax.tick_params(axis='y', colors=plot_fg)
-                ax.yaxis.label.set_color(plot_fg)
-                ax.xaxis.label.set_color(plot_fg)
-                ax.title.set_color(plot_fg)
-                for spine in ax.spines.values():
-                    spine.set_edgecolor(plot_fg)
-                ax.grid(True, color=grid_color)
-                
-                # Actualizar leyenda
-                legend = ax.get_legend()
-                if legend:
-                    legend.get_frame().set_facecolor(field_bg)
-                    legend.get_frame().set_edgecolor(plot_fg)
-                    for text in legend.get_texts():
-                        text.set_color(plot_fg)
-
-            # Redibujar
-            if hasattr(self, 'canvas'):
-                self.canvas.draw()
 
 # Clases auxiliares del código original
 def reconPyr(pyr):
