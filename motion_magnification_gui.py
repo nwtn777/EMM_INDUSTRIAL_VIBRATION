@@ -822,6 +822,25 @@ class MotionMagnificationGUI:
                 self.data_queue.get_nowait()
             except:
                 break
+
+        # Limpiar buffers de datos y espectrograma
+        self.signal_buffer.clear()
+        self.spectrogram_data = None
+        self.spectrogram_im = None
+        
+        # Limpiar gráficas
+        try:
+             self.line1.set_data([], [])
+             self.line2.set_data([], [])
+             if hasattr(self, 'ax3'):
+                 self.ax3.clear()
+                 self.ax3.set_title("🌊 Espectrograma (Waterfall)", fontsize=10, fontweight='bold')
+                 self.ax3.set_xlabel("Frecuencia (Hz)")
+                 self.ax3.set_ylabel("Tiempo (reciente arriba)")
+             if hasattr(self, 'canvas'):
+                 self.canvas.draw()
+        except:
+             pass
         
         # Actualizar estado visual
         self.status_label.config(text="Sistema detenido", foreground="red")
@@ -1510,8 +1529,9 @@ class MotionMagnificationGUI:
                                     else:
                                         self.csv_writer.writerow([self.frame_count, timestamp_str, 
                                                                mean_magnitude, mean_signal])
-                                    self.csv_file.flush()
-                                    self.csv_file.flush()
+                                    # Optimización: flush cada 10 frames para no matar el disco
+                                    if self.frame_count % 10 == 0:
+                                        self.csv_file.flush()
                                 except Exception as e:
                                     self.log_message(f"Error escribiendo a CSV de grabación: {str(e)}")
                                     
