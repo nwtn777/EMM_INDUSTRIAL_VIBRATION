@@ -35,26 +35,7 @@ def generar_graficos(df, output_dir, base_filename):
     image_paths = []
     fft_image_paths = []
     fft_peaks_dict = {}
-    
-    # Calcular Frecuencia de Muestreo (FS)
-    fs = 30.0  # Valor por defecto
-    if 'timestamp' in df.columns:
-        try:
-            # Intentar convertir a datetime
-            timestamps = pd.to_datetime(df['timestamp'])
-            # Calcular duración total en segundos
-            duration = (timestamps.iloc[-1] - timestamps.iloc[0]).total_seconds()
-            if duration > 0:
-                fs = (len(df) - 1) / duration
-                print(f"Frecuencia de muestreo detectada: {fs:.2f} Hz")
-        except Exception as e:
-            print(f"No se pudo calcular FPS desde timestamp: {e}")
-
-    # Excluir columnas que no son señales (como frame, timestamp, etc)
-    cols_to_plot = [c for c in df.select_dtypes(include='number').columns 
-                   if c.lower() not in ['frame', 'timestamp', 'index']]
-
-    for col in cols_to_plot:
+    for col in df.select_dtypes(include='number').columns:
         # Gráfico de la señal
         plt.figure(figsize=(8, 3))
         plt.plot(df[col], label=col)
@@ -73,7 +54,7 @@ def generar_graficos(df, output_dir, base_filename):
         n = len(x)
         x = x - np.mean(x)
         fft_vals = np.fft.rfft(x)
-        fft_freqs = np.fft.rfftfreq(n, d=1.0/fs)  # Usar fs calculada
+        fft_freqs = np.fft.rfftfreq(n, d=1.0)  # d=1.0: asume frecuencia de muestreo 1 Hz
         fft_mags = np.abs(fft_vals)
         # Gráfico espectro
         plt.figure(figsize=(8, 3))

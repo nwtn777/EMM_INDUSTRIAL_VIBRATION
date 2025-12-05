@@ -103,27 +103,6 @@ class MotionMagnificationGUI:
         self.root = root
         self.root.title("Motion Magnification - Sistema de Monitoreo de Vibraciones")
         self.root.geometry("1400x900")
-        self.root.minsize(1200, 700)
-        
-        # Agregar manejo de cierre de ventana
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
-        
-        # Variables de control
-        self.camera = None
-        self.is_running = False
-        self.selected_camera = tk.IntVar(value=0)
-        self.fps = tk.DoubleVar(value=30.0)
-        self.alpha = tk.DoubleVar(value=200.0)
-        self.lambda_c = tk.DoubleVar(value=80.0)
-        self.fl = tk.DoubleVar(value=0.5)
-        self.fh = tk.DoubleVar(value=9)
-
-        # Variables para fuente de video (Cámara vs Archivo)
-        self.video_source_type = tk.StringVar(value='camera')  # 'camera' o 'file'
-        self.video_file_path = ""
-        self.loop_video = tk.BooleanVar(value=True)
-
-
         # Añadimos estas variables para mantener compatibilidad, pero no se usan
         self.use_frame_skip = tk.BooleanVar(value=False)  # Siempre desactivado
         self.skip_frames = tk.IntVar(value=1)  # Siempre 1 (no saltar frames)
@@ -145,18 +124,14 @@ class MotionMagnificationGUI:
         self.video_queue = queue.Queue()
         
         # Buffer para datos
-        self.signal_buffer = deque(maxlen=100)
-        self.waterfall_buffer = deque(maxlen=100)  # Buffer para la gráfica de cascada
+        self.signal_buffer = deque(maxlen=300)
         self.frame_count = 0
         
-        # Variables para grabación CSV y Video
+        # Variables para grabación CSV
         self.is_recording = False
-        self.record_video = tk.BooleanVar(value=False)  # Checkbox para grabar video
-        self.video_writer = None
         self.csv_file = None
         self.csv_writer = None
         self.recording_filename = ""
-        self.video_filename = ""
         
         # Variables para ROI
         self.roi = None
@@ -202,7 +177,14 @@ class MotionMagnificationGUI:
         
         # Método de vibración: 'brillo' o 'flujo'
         self.vibration_method = tk.StringVar(value='brillo')
+        
+        # --- Dark Mode ---
+        self.dark_mode = tk.BooleanVar(value=False)
+        self.style = ttk.Style()
+        self.style.theme_use('clam')  # Usar 'clam' para mejor soporte de colores
+        
         self.setup_ui()
+        self.apply_theme()  # Aplicar tema inicial
         self.update_console()
         # Iniciar actualización de video con delay
         self.root.after(1000, self.update_video_display)
@@ -303,6 +285,10 @@ class MotionMagnificationGUI:
         opt_btn = ttk.Button(config_frame, text="Optimizar Alpha/Lambda automáticamente", command=run_auto_opt)
         opt_btn.grid(row=1, column=4, padx=10, pady=2, sticky='w')
 
+        # Botón de Dark Mode
+        self.dark_mode_btn = ttk.Button(config_frame, text="🌙 Dark Mode", command=self.toggle_theme)
+        self.dark_mode_btn.grid(row=0, column=4, padx=10, pady=2, sticky='w')
+
         # Selección de método de vibración
         ttk.Label(config_frame, text="Método de vibración:").grid(row=11, column=0, sticky='w', padx=5, pady=2)
         metodo_frame = ttk.Frame(config_frame)
@@ -314,116 +300,73 @@ class MotionMagnificationGUI:
             "Alpha (amplificación): 10-50 = baja, 100-200 = recomendado, >300 = solo para señales muy limpias.\n"
             "Lambda_c (escala espacial): 10-50 = detalles finos, 100-200 = piezas grandes, >300 = objetos muy grandes.\n"
             "Recomendado: Alpha 150-200 y Lambda_c 100-150 para vibraciones industriales.\n"
-            "Ajusta alpha para más/menos sensibilidad y lambda_c según el tamaño de la estructura que te interesa."
-        )
-        ttk.Label(config_frame, text=help_text, foreground="blue", font=("Arial", 8), justify="left", wraplength=600).grid(
-            row=12, column=0, columnspan=4, sticky='w', padx=5, pady=(8, 2))
-        
-        # --- Selección de Fuente (Row 0) ---
-        ttk.Label(config_frame, text="Fuente:").grid(row=0, column=0, sticky='w', padx=5, pady=2)
-        source_frame = ttk.Frame(config_frame)
-        source_frame.grid(row=0, column=1, columnspan=3, sticky='w')
-        
-        ttk.Radiobutton(source_frame, text="Cámara", variable=self.video_source_type, value='camera', 
-                       command=self.toggle_source_inputs).pack(side='left', padx=2)
-        ttk.Radiobutton(source_frame, text="Video", variable=self.video_source_type, value='file',
-                       command=self.toggle_source_inputs).pack(side='left', padx=2)
-        
-        self.loop_check = ttk.Checkbutton(source_frame, text="Loop", variable=self.loop_video)
-        self.loop_check.pack(side='left', padx=5)
-
-        # --- Selección de Entrada (Row 1) ---
-        ttk.Label(config_frame, text="Entrada:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
-        self.input_frame = ttk.Frame(config_frame)
-        self.input_frame.grid(row=1, column=1, columnspan=3, sticky='w', padx=5)
-        
-        # Widgets de Cámara
-        self.camera_combo = ttk.Combobox(self.input_frame, textvariable=self.selected_camera, 
-                                   values=list(range(5)), state='readonly', width=5)
-        self.camera_combo.pack(side='left', padx=2)
-        
-        # Widgets de Archivo (inicialmente ocultos o mostrados según estado)
-        self.load_video_btn = ttk.Button(self.input_frame, text="📂 Cargar", command=self.load_video_file)
-        self.file_label = ttk.Label(self.input_frame, text="<Sin archivo>", width=15, foreground="gray")
-        
-        # FPS (Row 2)
-        ttk.Label(config_frame, text="FPS:").grid(row=2, column=0, sticky='w', padx=5, pady=2)
-        fps_spinbox = ttk.Spinbox(config_frame, from_=1, to=60, textvariable=self.fps, 
-                                 width=8, increment=1)
-        fps_spinbox.grid(row=2, column=1, padx=5, pady=2)
-        
-        # Alpha (Row 3)
-        ttk.Label(config_frame, text="Alpha:").grid(row=3, column=0, sticky='w', padx=5, pady=2)
+        ttk.Label(config_frame, text="Alpha:").grid(row=1, column=0, sticky='w', padx=5, pady=2)
         alpha_spinbox = ttk.Spinbox(config_frame, from_=1, to=1000, textvariable=self.alpha, 
                                    width=8, increment=10)
-        alpha_spinbox.grid(row=3, column=1, padx=5, pady=2)
+        alpha_spinbox.grid(row=1, column=1, padx=5, pady=2)
         
-        # Lambda_c (Row 3)
-        ttk.Label(config_frame, text="Lambda_c:").grid(row=3, column=2, sticky='w', padx=5, pady=2)
+        # Lambda_c
+        ttk.Label(config_frame, text="Lambda_c:").grid(row=1, column=2, sticky='w', padx=5, pady=2)
         lambda_spinbox = ttk.Spinbox(config_frame, from_=1, to=500, textvariable=self.lambda_c, 
                                     width=8, increment=10)
-        lambda_spinbox.grid(row=3, column=3, padx=5, pady=2)
+        lambda_spinbox.grid(row=1, column=3, padx=5, pady=2)
         
-        # Frecuencias (Row 4)
-        ttk.Label(config_frame, text="fl:").grid(row=4, column=0, sticky='w', padx=5, pady=2)
+        # Frecuencias
+        ttk.Label(config_frame, text="fl:").grid(row=2, column=0, sticky='w', padx=5, pady=2)
         fl_spinbox = ttk.Spinbox(config_frame, from_=0.01, to=10, textvariable=self.fl, 
                                 width=8, increment=0.01, format="%.3f")
-        fl_spinbox.grid(row=4, column=1, padx=5, pady=2)
+        fl_spinbox.grid(row=2, column=1, padx=5, pady=2)
         
-        ttk.Label(config_frame, text="fh:").grid(row=4, column=2, sticky='w', padx=5, pady=2)
+        ttk.Label(config_frame, text="fh:").grid(row=2, column=2, sticky='w', padx=5, pady=2)
         fh_spinbox = ttk.Spinbox(config_frame, from_=0.1, to=20, textvariable=self.fh, 
                                 width=8, increment=0.1, format="%.2f")
-        fh_spinbox.grid(row=4, column=3, padx=5, pady=2)
+        fh_spinbox.grid(row=2, column=3, padx=5, pady=2)
         
-        # Filtro FFT de frecuencias bajas (Row 5)
+        # Filtro FFT de frecuencias bajas
         ttk.Label(config_frame, text="🔽 Filtro FFT:", font=('Arial', 8, 'bold')).grid(
-            row=5, column=0, columnspan=2, sticky='w', padx=5, pady=2)
+            row=3, column=0, columnspan=2, sticky='w', padx=5, pady=2)
         
         fft_filter_check = ttk.Checkbutton(config_frame, text="Filtrar freq. bajas", 
                                           variable=self.fft_highpass_enabled)
-        fft_filter_check.grid(row=5, column=2, columnspan=2, sticky='w', padx=5, pady=2)
+        fft_filter_check.grid(row=3, column=2, columnspan=2, sticky='w', padx=5, pady=2)
         
-        ttk.Label(config_frame, text="Corte (Hz):").grid(row=6, column=0, sticky='w', padx=5, pady=2)
+        ttk.Label(config_frame, text="Corte (Hz):").grid(row=4, column=0, sticky='w', padx=5, pady=2)
         cutoff_spinbox = ttk.Spinbox(config_frame, from_=0.1, to=10, textvariable=self.fft_cutoff_freq, 
                                    width=8, increment=0.1, format="%.1f")
-        cutoff_spinbox.grid(row=6, column=1, padx=5, pady=2)
+        cutoff_spinbox.grid(row=4, column=1, padx=5, pady=2)
         
-        # Calibración física (Row 7)
+        # Calibración física
         calib_separator = ttk.Separator(config_frame, orient='horizontal')
-        calib_separator.grid(row=7, column=0, columnspan=4, sticky='ew', pady=5)
+        calib_separator.grid(row=5, column=0, columnspan=4, sticky='ew', pady=5)
         
         ttk.Label(config_frame, text="📏 Calibración Física", font=('Arial', 9, 'bold')).grid(
-            row=8, column=0, columnspan=4, pady=2)
+            row=6, column=0, columnspan=4, pady=2)
         
-        ttk.Label(config_frame, text="Dist. real (mm):").grid(row=9, column=0, sticky='w', padx=5, pady=2)
+        ttk.Label(config_frame, text="Dist. real (mm):").grid(row=7, column=0, sticky='w', padx=5, pady=2)
         calib_dist_spinbox = ttk.Spinbox(config_frame, from_=1, to=1000, textvariable=self.calibration_distance_mm, 
                                         width=8, increment=1, format="%.1f")
-        calib_dist_spinbox.grid(row=9, column=1, padx=5, pady=2)
+        calib_dist_spinbox.grid(row=7, column=1, padx=5, pady=2)
         
-        ttk.Label(config_frame, text="Píxeles:").grid(row=9, column=2, sticky='w', padx=5, pady=2)
+        ttk.Label(config_frame, text="Píxeles:").grid(row=7, column=2, sticky='w', padx=5, pady=2)
         calib_pixels_spinbox = ttk.Spinbox(config_frame, from_=1, to=5000, textvariable=self.calibration_pixels, 
                                           width=8, increment=1)
-        calib_pixels_spinbox.grid(row=9, column=3, padx=5, pady=2)
+        calib_pixels_spinbox.grid(row=7, column=3, padx=5, pady=2)
         
-        # Sección de optimización de rendimiento (Row 10)
+        # Sección de optimización de rendimiento
         optim_separator = ttk.Separator(config_frame, orient='horizontal')
-        optim_separator.grid(row=10, column=0, columnspan=4, sticky='ew', pady=5)
+        optim_separator.grid(row=8, column=0, columnspan=4, sticky='ew', pady=5)
         
         ttk.Label(config_frame, text=" Optimización de Rendimiento", font=('Arial', 9, 'bold')).grid(
-            row=11, column=0, columnspan=4, pady=2)
+            row=9, column=0, columnspan=4, pady=2)
         
         # Procesamiento paralelo
         parallel_check = ttk.Checkbutton(config_frame, text="Procesamiento paralelo", 
                                         variable=self.use_parallel_processing)
-        parallel_check.grid(row=12, column=0, columnspan=2, sticky='w', padx=5, pady=2)
+        parallel_check.grid(row=10, column=0, columnspan=2, sticky='w', padx=5, pady=2)
         
         # Información de rendimiento
         ttk.Label(config_frame, text=f"CPUs detectadas: {multiprocessing.cpu_count()}", 
-                 font=('Arial', 8, 'italic')).grid(row=12, column=2, columnspan=2, sticky='w', padx=5, pady=2)
-
-        # Inicializar estado de inputs
-        self.toggle_source_inputs()
-
+                 font=('Arial', 8, 'italic')).grid(row=10, column=2, columnspan=2, sticky='w', padx=5, pady=2)
         
         
         # Botones de control
@@ -480,11 +423,6 @@ class MotionMagnificationGUI:
         self.stop_record_button = ttk.Button(button_row4, text="⏺ Detener Grabación", 
                                             command=self.stop_recording, state='disabled')
         self.stop_record_button.pack(side='left', padx=5)
-
-        # Checkbox para habilitar grabación de video
-        self.video_record_check = ttk.Checkbutton(button_row4, text="Grabar Video (.mp4)", 
-                                                 variable=self.record_video)
-        self.video_record_check.pack(side='left', padx=5)
         
         # Frame para mostrar estado actual
         status_frame = ttk.LabelFrame(parent, text="Estado del Sistema")
@@ -502,48 +440,6 @@ class MotionMagnificationGUI:
         
         self.recording_status_label = ttk.Label(status_frame, text="Grabación: Detenida", foreground="orange")
         self.recording_status_label.pack(pady=2)
-
-    def toggle_source_inputs(self):
-        """Alternar visibilidad de inputs según fuente seleccionada"""
-        source = self.video_source_type.get()
-        if source == 'camera':
-            self.load_video_btn.pack_forget()
-            self.file_label.pack_forget()
-            self.camera_combo.pack(side='left', padx=2)
-            self.loop_check.config(state='disabled')
-        else:
-            self.camera_combo.pack_forget()
-            self.load_video_btn.pack(side='left', padx=2)
-            self.file_label.pack(side='left', padx=2)
-            self.loop_check.config(state='normal')
-
-    def load_video_file(self):
-        """Abrir diálogo para seleccionar archivo de video"""
-        file_path = filedialog.askopenfilename(
-            title="Seleccionar video",
-            filetypes=[("Archivos de video", "*.mp4 *.avi *.mov *.mkv"), ("Todos los archivos", "*.*")]
-        )
-        if file_path:
-            self.video_file_path = file_path
-            filename = os.path.basename(file_path)
-            # Acortar nombre si es muy largo
-            if len(filename) > 20:
-                filename = filename[:17] + "..."
-            self.file_label.config(text=filename, foreground="black")
-            self.log_message(f"Video cargado: {file_path}")
-            
-            # Intentar leer FPS del video
-            try:
-                cap = cv2.VideoCapture(file_path)
-                if cap.isOpened():
-                    fps = cap.get(cv2.CAP_PROP_FPS)
-                    if fps > 0:
-                        self.fps.set(fps)
-                        self.log_message(f"FPS detectados del video: {fps:.2f}")
-                    cap.release()
-            except Exception as e:
-                self.log_message(f"Advertencia: No se pudo leer FPS del video: {e}")
-
         
     def setup_video_panel(self, parent):
         """Configurar el panel de video"""
@@ -711,33 +607,18 @@ class MotionMagnificationGUI:
             elif not hasattr(self, 'executor'):
                 self.executor = ThreadPoolExecutor(max_workers=self.max_workers)
             
-            # Inicializar cámara o video
-            source_type = self.video_source_type.get()
+            # Inicializar cámara
+            camera_id = self.selected_camera.get()
+            self.camera = cv2.VideoCapture(camera_id)
             
-            if source_type == 'camera':
-                camera_id = self.selected_camera.get()
-                self.camera = cv2.VideoCapture(camera_id)
-                if not self.camera.isOpened():
-                    messagebox.showerror("Error", f"No se pudo abrir la cámara {camera_id}")
-                    return
-                self.log_message(f"Cámara {camera_id} inicializada correctamente")
-            else:
-                if not self.video_file_path:
-                    messagebox.showerror("Error", "No se ha seleccionado ningún archivo de video")
-                    return
-                if not os.path.exists(self.video_file_path):
-                    messagebox.showerror("Error", f"El archivo no existe: {self.video_file_path}")
-                    return
-                    
-                self.camera = cv2.VideoCapture(self.video_file_path)
-                if not self.camera.isOpened():
-                    messagebox.showerror("Error", f"No se pudo abrir el archivo de video")
-                    return
-                self.log_message(f"Video inicializado: {os.path.basename(self.video_file_path)}")
-            
+            if not self.camera.isOpened():
+                messagebox.showerror("Error", f"No se pudo abrir la cámara {camera_id}")
+                return
+                
             # Ya no se usa calibración de ruido
             if not use_calibration:
                 self.log_message("Iniciando sin calibración de ruido de fondo")
+            self.log_message(f"Cámara {camera_id} inicializada correctamente")
             
             # Actualizar estado visual
             self.status_label.config(text="Sistema ejecutándose", foreground="green")
@@ -789,7 +670,6 @@ class MotionMagnificationGUI:
         self.magnify_engine = None
         self.frame_count = 0
         self.signal_buffer.clear()
-        self.waterfall_buffer.clear()
         
         # Limpiar caches
         self.pyramid_cache.clear()
@@ -811,25 +691,6 @@ class MotionMagnificationGUI:
                 self.data_queue.get_nowait()
             except:
                 break
-
-        # Limpiar buffers de datos y espectrograma
-        self.signal_buffer.clear()
-        self.spectrogram_data = None
-        self.spectrogram_im = None
-        
-        # Limpiar gráficas
-        try:
-             self.line1.set_data([], [])
-             self.line2.set_data([], [])
-             if hasattr(self, 'ax3'):
-                 self.ax3.clear()
-                 self.ax3.set_title("🌊 Espectrograma (Waterfall)", fontsize=10, fontweight='bold')
-                 self.ax3.set_xlabel("Frecuencia (Hz)")
-                 self.ax3.set_ylabel("Tiempo (reciente arriba)")
-             if hasattr(self, 'canvas'):
-                 self.canvas.draw()
-        except:
-             pass
         
         # Actualizar estado visual
         self.status_label.config(text="Sistema detenido", foreground="red")
@@ -853,6 +714,20 @@ class MotionMagnificationGUI:
         
         self.log_message("Monitoreo detenido - Sistema listo para nueva configuración")
         
+    def select_video_file(self):
+        """Abrir diálogo para seleccionar archivo de video"""
+        filepath = filedialog.askopenfilename(
+            title="Seleccionar archivo de video",
+            filetypes=[("Archivos de video", "*.mp4 *.avi *.mov *.mkv"), ("Todos los archivos", "*.*")]
+        )
+        if filepath:
+            self.video_file_path = filepath
+            self.video_source_mode = 'file'
+            self.log_message(f"Fuente de video seleccionada: Archivo ({os.path.basename(filepath)})")
+            # Actualizar etiqueta o UI si es necesario
+            if hasattr(self, 'source_label'):
+                self.source_label.config(text=f"Archivo: {os.path.basename(filepath)}")
+
     def select_roi(self):
         """Seleccionar ROI en la imagen"""
         if not self.camera:
@@ -1279,8 +1154,6 @@ class MotionMagnificationGUI:
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             self.recording_filename = f"historiales/vibration_recording_{timestamp}.csv"
             os.makedirs("historiales", exist_ok=True)
-            
-            # Inicializar CSV
             self.csv_file = open(self.recording_filename, mode='w', newline='')
             self.csv_writer = csv.writer(self.csv_file)
             if self.is_calibrated:
@@ -1288,28 +1161,13 @@ class MotionMagnificationGUI:
                                         "velocity_mm_s", "mean_signal", "mm_per_pixel"])
             else:
                 self.csv_writer.writerow(["frame", "timestamp", "mean_magnitude_px_frame", "mean_signal"])
-            
-            # Preparar grabación de video si está habilitada
-            if self.record_video.get():
-                self.video_filename = f"historiales/video_recording_{timestamp}.mp4"
-                # El writer se inicializará en el loop de procesamiento para asegurar dimensiones correctas
-                self.video_writer = None 
-                
             self.is_recording = True
             # Actualizar interfaz
             self.record_button.config(state='disabled')
             self.stop_record_button.config(state='normal')
-            self.video_record_check.config(state='disabled') # Bloquear cambio durante grabación
-            
-            status_text = f"Grabación: ACTIVA - CSV"
-            if self.record_video.get():
-                status_text += " + VIDEO"
-            
-            self.recording_status_label.config(text=status_text, foreground="green")
+            self.recording_status_label.config(text=f"Grabación: ACTIVA - {self.recording_filename}", 
+                                             foreground="green")
             self.log_message(f"Grabación iniciada: {self.recording_filename}")
-            if self.record_video.get():
-                self.log_message(f"Grabación de video habilitada: {self.video_filename}")
-                
             # Actualizar botones de la pestaña de gráficas
             if hasattr(self, 'graph_record_button'):
                 self.update_graph_record_buttons()
@@ -1327,23 +1185,12 @@ class MotionMagnificationGUI:
                 self.csv_file.close()
                 self.csv_file = None
                 self.csv_writer = None
-                
-            # Cerrar Video Writer
-            if self.video_writer:
-                self.video_writer.release()
-                self.video_writer = None
-                
             self.is_recording = False
             # Actualizar interfaz
             self.record_button.config(state='normal' if self.is_running else 'disabled')
             self.stop_record_button.config(state='disabled')
-            self.video_record_check.config(state='normal') # Habilitar checkbox nuevamente
-            
             self.recording_status_label.config(text="Grabación: Detenida", foreground="orange")
-            msg = f"Grabación detenida.\nCSV: {self.recording_filename}"
-            if self.record_video.get():
-                msg += f"\nVideo: {self.video_filename}"
-            self.log_message(msg.replace("\n", " | "))
+            self.log_message(f"Grabación detenida. Archivo guardado: {self.recording_filename}")
             # Actualizar botones de la pestaña de gráficas
             if hasattr(self, 'graph_record_button'):
                 self.update_graph_record_buttons()
@@ -1409,19 +1256,7 @@ class MotionMagnificationGUI:
 
                 ret, frame = self.camera.read()
                 if not ret:
-                    # Manejo de fin de video o error de cámara
-                    if self.video_source_type.get() == 'file':
-                        if self.loop_video.get():
-                            self.log_message("Reiniciando video (Loop)...")
-                            self.camera.set(cv2.CAP_PROP_POS_FRAMES, 0)
-                            continue
-                        else:
-                            self.log_message("Fin del video.")
-                            self.stop_monitoring()
-                            break
-                    else:
-                        self.log_message("Error leyendo frame de cámara.")
-                        break
+                    break
 
                 # Actualizar el frame actual para optimización y GUI
                 self.current_frame = frame.copy()
@@ -1510,7 +1345,7 @@ class MotionMagnificationGUI:
                             # Guardar en CSV de grabación solo si está activa
                             if self.is_recording and self.csv_writer:
                                 try:
-                                    timestamp_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")
+                                    timestamp_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                     if self.is_calibrated:
                                         self.csv_writer.writerow([self.frame_count, timestamp_str, 
                                                                mean_magnitude, physical_value, mean_signal, 
@@ -1518,29 +1353,9 @@ class MotionMagnificationGUI:
                                     else:
                                         self.csv_writer.writerow([self.frame_count, timestamp_str, 
                                                                mean_magnitude, mean_signal])
-                                    # Optimización: flush cada 10 frames para no matar el disco
-                                    if self.frame_count % 10 == 0:
-                                        self.csv_file.flush()
+                                    self.csv_file.flush()
                                 except Exception as e:
                                     self.log_message(f"Error escribiendo a CSV de grabación: {str(e)}")
-                                    
-                                # Grabar video si está habilitado
-                                if self.record_video.get():
-                                    try:
-                                        # Inicializar writer si es el primer frame
-                                        if self.video_writer is None:
-                                            h_frame, w_frame = frame.shape[:2]
-                                            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                                            # Usar FPS actual o el configurado
-                                            rec_fps = self.get_effective_fps()
-                                            self.video_writer = cv2.VideoWriter(self.video_filename, fourcc, rec_fps, (w_frame, h_frame))
-                                            self.log_message("VideoWriter inicializado correctamente")
-                                        
-                                        # Escribir frame
-                                        if self.video_writer is not None:
-                                            self.video_writer.write(frame)
-                                    except Exception as e:
-                                        self.log_message(f"Error grabando video: {str(e)}")
                             
                             # Enviar datos para gráficas
                             try:
@@ -1709,28 +1524,85 @@ class MotionMagnificationGUI:
                         self.ax2.grid(True, which='both', linestyle=':', alpha=0.4)
                         self.ax2.legend(loc='upper right', fontsize=9, frameon=True)
 
-                        # Actualizar Waterfall (Espectrograma)
-                        # Solo si el buffer está lleno para asegurar consistencia en dimensiones
-                        if len(signal_data) >= 100:
-                            # Usar logaritmo para resaltar detalles de baja amplitud
-                            fft_log = np.log1p(fft_vals[1:])
-                            self.waterfall_buffer.append(fft_log)
-                            
-                            if len(self.waterfall_buffer) > 0:
-                                waterfall_arr = np.array(self.waterfall_buffer)
-                                self.waterfall_im.set_data(waterfall_arr)
-                                self.waterfall_im.set_clim(vmin=np.min(waterfall_arr), vmax=np.max(waterfall_arr))
-                                
-                                # Ajustar extensión de ejes [xmin, xmax, ymin, ymax]
-                                if len(freqs) > 1:
-                                    self.waterfall_im.set_extent([freqs[1], freqs[-1], 0, len(self.waterfall_buffer)])
-
                     self.canvas.draw()
         except queue.Empty:
             pass
         if self.root.winfo_exists():
             self.root.after(100, self.update_graphs)
 
+
+    def toggle_theme(self):
+        """Alternar entre modo claro y oscuro"""
+        self.dark_mode.set(not self.dark_mode.get())
+        self.apply_theme()
+
+    def apply_theme(self):
+        """Aplicar el tema actual (claro/oscuro) a la interfaz"""
+        is_dark = self.dark_mode.get()
+        
+        # Colores
+        bg_color = "#2b2b2b" if is_dark else "#f0f0f0"
+        fg_color = "#ffffff" if is_dark else "#000000"
+        field_bg = "#3b3b3b" if is_dark else "#ffffff"
+        select_bg = "#4a6984" if is_dark else "#0078d7"
+        
+        # Configurar root
+        self.root.configure(bg=bg_color)
+        
+        # Configurar estilos ttk
+        self.style.configure(".", background=bg_color, foreground=fg_color, fieldbackground=field_bg)
+        self.style.configure("TFrame", background=bg_color)
+        self.style.configure("TLabel", background=bg_color, foreground=fg_color)
+        self.style.configure("TButton", background=field_bg, foreground=fg_color, borderwidth=1)
+        self.style.map("TButton", background=[('active', select_bg)])
+        self.style.configure("TLabelframe", background=bg_color, foreground=fg_color)
+        self.style.configure("TLabelframe.Label", background=bg_color, foreground=fg_color)
+        self.style.configure("TCheckbutton", background=bg_color, foreground=fg_color)
+        self.style.configure("TRadiobutton", background=bg_color, foreground=fg_color)
+        self.style.configure("TNotebook", background=bg_color)
+        self.style.configure("TNotebook.Tab", background=bg_color, foreground=fg_color, padding=[10, 2])
+        self.style.map("TNotebook.Tab", background=[('selected', field_bg)], foreground=[('selected', fg_color)])
+        self.style.configure("TCombobox", fieldbackground=field_bg, background=bg_color, foreground=fg_color)
+        self.style.configure("TSpinbox", fieldbackground=field_bg, background=bg_color, foreground=fg_color)
+        
+        # Configurar widgets tk estándar
+        if hasattr(self, 'console_text'):
+            self.console_text.configure(bg=field_bg, fg=fg_color, insertbackground=fg_color)
+            
+        # Actualizar botón de tema
+        if hasattr(self, 'dark_mode_btn'):
+            self.dark_mode_btn.config(text="☀️ Light Mode" if is_dark else "🌙 Dark Mode")
+
+        # Actualizar gráficas matplotlib
+        if hasattr(self, 'fig'):
+            plot_bg = "#2b2b2b" if is_dark else "white"
+            plot_fg = "white" if is_dark else "black"
+            grid_color = "#555555" if is_dark else "#dddddd"
+            
+            self.fig.patch.set_facecolor(plot_bg)
+            
+            for ax in [self.ax1, self.ax2]:
+                ax.set_facecolor(plot_bg)
+                ax.tick_params(axis='x', colors=plot_fg)
+                ax.tick_params(axis='y', colors=plot_fg)
+                ax.yaxis.label.set_color(plot_fg)
+                ax.xaxis.label.set_color(plot_fg)
+                ax.title.set_color(plot_fg)
+                for spine in ax.spines.values():
+                    spine.set_edgecolor(plot_fg)
+                ax.grid(True, color=grid_color)
+                
+                # Actualizar leyenda
+                legend = ax.get_legend()
+                if legend:
+                    legend.get_frame().set_facecolor(field_bg)
+                    legend.get_frame().set_edgecolor(plot_fg)
+                    for text in legend.get_texts():
+                        text.set_color(plot_fg)
+
+            # Redibujar
+            if hasattr(self, 'canvas'):
+                self.canvas.draw()
 
 # Clases auxiliares del código original
 def reconPyr(pyr):
