@@ -192,7 +192,14 @@ class MotionMagnificationGUI:
         
         # Método de vibración: 'brillo' o 'flujo'
         self.vibration_method = tk.StringVar(value='brillo')
+        
+        # --- Dark Mode ---
+        self.dark_mode = tk.BooleanVar(value=False)
+        self.style = ttk.Style()
+        self.style.theme_use('clam')  # Usar 'clam' para mejor soporte de colores
+        
         self.setup_ui()
+        self.apply_theme()  # Aplicar tema inicial
         self.update_console()
         # Iniciar actualización de video con delay
         self.root.after(1000, self.update_video_display)
@@ -239,6 +246,11 @@ class MotionMagnificationGUI:
         report_tab = ttk.Frame(notebook)
         notebook.add(report_tab, text="Reporte Estadístico")
         self.setup_report_tab(report_tab)
+
+        # --- Pestaña 4: Análisis de Video Offline ---
+        offline_tab = ttk.Frame(notebook)
+        notebook.add(offline_tab, text="Análisis de Video Offline")
+        self.setup_offline_tab(offline_tab)
 
     def setup_report_tab(self, parent):
         """Configura la pestaña de generación de reportes PDF estadísticos."""
@@ -292,6 +304,10 @@ class MotionMagnificationGUI:
 
         opt_btn = ttk.Button(config_frame, text="Optimizar Alpha/Lambda automáticamente", command=run_auto_opt)
         opt_btn.grid(row=1, column=4, padx=10, pady=2, sticky='w')
+
+        # Botón de Dark Mode
+        self.dark_mode_btn = ttk.Button(config_frame, text="🌙 Dark Mode", command=self.toggle_theme)
+        self.dark_mode_btn.grid(row=0, column=4, padx=10, pady=2, sticky='w')
 
         # Selección de método de vibración
         ttk.Label(config_frame, text="Método de vibración:").grid(row=11, column=0, sticky='w', padx=5, pady=2)
@@ -1312,9 +1328,7 @@ class MotionMagnificationGUI:
                             else:
                                 info_text = f"ROI: {w}x{h} | Mag: {mean_magnitude:.2f} px/frame"
                             
-                            cv2.putText(frame, info_text, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 
-                                       0.6, (0, 255, 0), 2)
-                            
+
                             # Información de rendimiento
                             processing_time = time.time() - frame_start_time;
                             fps_actual = 1.0 / processing_time if processing_time > 0 else 0
@@ -1538,6 +1552,104 @@ class MotionMagnificationGUI:
         if self.root.winfo_exists():
             self.root.after(100, self.update_graphs)
 
+
+    def toggle_theme(self):
+        """Alternar entre modo claro y oscuro"""
+        self.dark_mode.set(not self.dark_mode.get())
+        self.apply_theme()
+
+    def apply_theme(self):
+        """Aplicar el tema actual (claro/oscuro) a la interfaz"""
+        is_dark = self.dark_mode.get()
+        
+        # Colores
+        bg_color = "#2b2b2b" if is_dark else "#f0f0f0"
+        fg_color = "#ffffff" if is_dark else "#000000"
+        field_bg = "#3b3b3b" if is_dark else "#ffffff"
+        select_bg = "#4a6984" if is_dark else "#0078d7"
+        
+        # Configurar root
+        self.root.configure(bg=bg_color)
+        
+        # Configurar estilos ttk
+        self.style.configure(".", background=bg_color, foreground=fg_color, fieldbackground=field_bg)
+        self.style.configure("TFrame", background=bg_color)
+        self.style.configure("TLabel", background=bg_color, foreground=fg_color)
+        self.style.configure("TButton", background=field_bg, foreground=fg_color, borderwidth=1)
+        self.style.map("TButton", background=[('active', select_bg)])
+        self.style.configure("TLabelframe", background=bg_color, foreground=fg_color)
+        self.style.configure("TLabelframe.Label", background=bg_color, foreground=fg_color)
+        self.style.configure("TCheckbutton", background=bg_color, foreground=fg_color)
+        self.style.configure("TRadiobutton", background=bg_color, foreground=fg_color)
+        self.style.configure("TNotebook", background=bg_color)
+        self.style.configure("TNotebook.Tab", background=bg_color, foreground=fg_color, padding=[10, 2])
+        self.style.map("TNotebook.Tab", background=[('selected', field_bg)], foreground=[('selected', fg_color)])
+        self.style.configure("TCombobox", fieldbackground=field_bg, background=bg_color, foreground=fg_color)
+        self.style.configure("TSpinbox", fieldbackground=field_bg, background=bg_color, foreground=fg_color)
+        
+        # Configurar widgets tk estándar
+        if hasattr(self, 'console_text'):
+            self.console_text.configure(bg=field_bg, fg=fg_color, insertbackground=fg_color)
+            
+        # Actualizar botón de tema
+        if hasattr(self, 'dark_mode_btn'):
+            self.dark_mode_btn.config(text="☀️ Light Mode" if is_dark else "🌙 Dark Mode")
+
+        # Actualizar gráficas matplotlib
+        if hasattr(self, 'fig'):
+            plot_bg = "#2b2b2b" if is_dark else "white"
+            plot_fg = "white" if is_dark else "black"
+            grid_color = "#555555" if is_dark else "#dddddd"
+            
+            self.fig.patch.set_facecolor(plot_bg)
+            
+            for ax in [self.ax1, self.ax2]:
+                ax.set_facecolor(plot_bg)
+                ax.tick_params(axis='x', colors=plot_fg)
+                ax.tick_params(axis='y', colors=plot_fg)
+                ax.yaxis.label.set_color(plot_fg)
+                ax.xaxis.label.set_color(plot_fg)
+                ax.title.set_color(plot_fg)
+                for spine in ax.spines.values():
+                    spine.set_edgecolor(plot_fg)
+                ax.grid(True, color=grid_color)
+                
+                # Actualizar leyenda
+                legend = ax.get_legend()
+                if legend:
+                    legend.get_frame().set_facecolor(field_bg)
+                    legend.get_frame().set_edgecolor(plot_fg)
+                    for text in legend.get_texts():
+                        text.set_color(plot_fg)
+
+            # Redibujar
+            if hasattr(self, 'canvas'):
+                self.canvas.draw()
+
+    def setup_offline_tab(self, parent):
+        """Configura la pestaña para análisis de videos offline."""
+        label = ttk.Label(parent, text="Análisis de videos desde archivo (offline)", font=("Arial", 12))
+        label.pack(pady=20)
+
+        btn_load = ttk.Button(parent, text="Cargar video", command=self.handle_load_offline_video)
+        btn_load.pack(pady=10)
+
+        self.offline_status = ttk.Label(parent, text="", foreground="blue")
+        self.offline_status.pack(pady=10)
+
+        # Aquí puedes agregar widgets para seleccionar ROI, mostrar el video y botones para grabar gráficas y el ROI
+
+    def handle_load_offline_video(self):
+        """Maneja la carga de un video offline para análisis."""
+        file_path = filedialog.askopenfilename(
+            title='Selecciona un archivo de video',
+            filetypes=[('Archivos de video', '*.mp4;*.avi;*.mov'), ('Todos los archivos', '*.*')]
+        )
+        if not file_path:
+            return
+        self.offline_status.config(text=f"Video cargado: {file_path}", foreground="green")
+        # Aquí puedes agregar la lógica para mostrar el video, seleccionar ROI y grabar resultados
+    
 
 # Clases auxiliares del código original
 def reconPyr(pyr):
