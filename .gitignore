@@ -1,2 +1,6 @@
 cpp_migration/
 __pycache__/
+.venv/
+.vscode/
+.gitignore
+.gitattributes
